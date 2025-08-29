@@ -148,7 +148,7 @@ def add_documents_to_qdrant(
     settings: Settings,
 ) -> None:
     points = []
-    client = OpenAI(api_key=settings.openai_api_key)
+    client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 
     for i, doc in enumerate(docs):
         content = doc.page_content

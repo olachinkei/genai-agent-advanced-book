@@ -1,3 +1,4 @@
+import os
 from langchain.tools import tool
 from openai import OpenAI
 from pydantic import BaseModel, Field
@@ -6,6 +7,8 @@ from qdrant_client import QdrantClient
 from src.configs import Settings
 from src.custom_logger import setup_logger
 from src.models import SearchOutput
+
+import weave
 
 # 検索結果の最大取得数
 MAX_SEARCH_RESULTS = 3
@@ -18,6 +21,7 @@ class SearchQueryInput(BaseModel):
 
 
 @tool(args_schema=SearchQueryInput)
+@weave.op()
 def search_xyz_qa(query: str) -> list[SearchOutput]:
     """
     XYZシステムの過去の質問回答ペアを検索する関数。
@@ -28,7 +32,7 @@ def search_xyz_qa(query: str) -> list[SearchOutput]:
     qdrant_client = QdrantClient("http://localhost:6333")
 
     settings = Settings()
-    openai_client = OpenAI(api_key=settings.openai_api_key)
+    openai_client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 
     logger.info("Generating embedding vector from input query")
     query_vector = (

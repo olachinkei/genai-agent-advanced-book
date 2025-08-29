@@ -4,6 +4,7 @@ from pydantic import BaseModel, Field
 
 from src.custom_logger import setup_logger
 from src.models import SearchOutput
+import weave
 
 # 検索結果の最大取得数
 MAX_SEARCH_RESULTS = 3
@@ -18,6 +19,7 @@ class SearchKeywordInput(BaseModel):
 
 # LangChainのtoolデコレーターを使って、検索機能をツール化
 @tool(args_schema=SearchKeywordInput)
+@weave.op()
 def search_xyz_manual(keywords: str) -> list[SearchOutput]:
     """
     XYZシステムのドキュメントを調査する関数。

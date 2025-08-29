@@ -1,4 +1,7 @@
 import operator
+import os
+import weave
+os.environ["WEAVE_TRACE_LANGCHAIN"] = "false"
 from typing import Annotated, Literal, Sequence, TypedDict
 
 from langchain_core.utils.function_calling import convert_to_openai_tool
@@ -21,6 +24,7 @@ from src.models import (
 from src.prompts import HelpDeskAgentPrompts
 
 MAX_CHALLENGE_COUNT = 3
+
 
 logger = setup_logger(__file__)
 
@@ -45,19 +49,29 @@ class AgentSubGraphState(TypedDict):
     subtask_answer: str
 
 
-class HelpDeskAgent:
+class HelpDeskAgent(weave.Model):
+    settings: Settings = None
+    tools: list = []
+    tool_map: dict = {}
+    prompts: HelpDeskAgentPrompts = None
+    client: OpenAI = None
+
     def __init__(
         self,
         settings: Settings,
         tools: list = [],
         prompts: HelpDeskAgentPrompts = HelpDeskAgentPrompts(),
     ) -> None:
+        super().__init__()
         self.settings = settings
         self.tools = tools
         self.tool_map = {tool.name: tool for tool in tools}
         self.prompts = prompts
-        self.client = OpenAI(api_key=self.settings.openai_api_key)
+        self.client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 
+
+
+    @weave.op()
     def create_plan(self, state: AgentState) -> dict:
         """計画を作成する
 
@@ -106,6 +120,7 @@ class HelpDeskAgent:
         # 生成した計画を返し、状態を更新する
         return {"plan": plan.subtasks}
 
+    @weave.op()
     def select_tools(self, state: AgentSubGraphState) -> dict:
         """ツールを選択する
 
@@ -178,6 +193,7 @@ class HelpDeskAgent:
         # リトライの場合は追加分のメッセージのみを更新する
         return {"messages": messages}
 
+    @weave.op()
     def execute_tools(self, state: AgentSubGraphState) -> dict:
         """ツールを実行する
 
@@ -230,6 +246,7 @@ class HelpDeskAgent:
         logger.info("Tool execution complete!")
         return {"messages": messages, "tool_results": [tool_results]}
 
+    @weave.op()
     def create_subtask_answer(self, state: AgentSubGraphState) -> dict:
         """サブタスク回答を作成する
 
@@ -268,6 +285,7 @@ class HelpDeskAgent:
             "subtask_answer": subtask_answer,
         }
 
+    @weave.op()
     def reflect_subtask(self, state: AgentSubGraphState) -> dict:
         """サブタスク回答を内省する
 
@@ -326,6 +344,7 @@ class HelpDeskAgent:
         logger.info("Reflection complete!")
         return update_state
 
+    @weave.op()
     def create_answer(self, state: AgentState) -> dict:
         """最終回答を作成する
 
@@ -368,6 +387,7 @@ class HelpDeskAgent:
 
         return {"last_answer": response.choices[0].message.content}
 
+    @weave.op()
     def _execute_subgraph(self, state: AgentState):
         subgraph = self._create_subgraph()
 
@@ -393,6 +413,7 @@ class HelpDeskAgent:
 
         return {"subtask_results": [subtask_result]}
 
+    @weave.op()
     def _should_continue_exec_subtasks(self, state: AgentState) -> list:
         return [
             Send(
@@ -406,12 +427,14 @@ class HelpDeskAgent:
             for idx, _ in enumerate(state["plan"])
         ]
 
+    @weave.op()
     def _should_continue_exec_subtask_flow(self, state: AgentSubGraphState) -> Literal["end", "continue"]:
         if state["is_completed"] or state["challenge_count"] >= MAX_CHALLENGE_COUNT:
             return "end"
         else:
             return "continue"
 
+    @weave.op()
     def _create_subgraph(self) -> Pregel:
         """サブグラフを作成する
 
@@ -451,6 +474,7 @@ class HelpDeskAgent:
 
         return app
 
+    @weave.op()
     def create_graph(self) -> Pregel:
         """エージェントのメイングラフを作成する
 
@@ -484,6 +508,7 @@ class HelpDeskAgent:
 
         return app
 
+    @weave.op()
     def run_agent(self, question: str) -> AgentResult:
         """エージェントを実行する
 
